@@ -4,7 +4,8 @@ import Scanner from "./components/Scanner.jsx";
 import ReviewTickets from "./components/ReviewTickets.jsx";
 import BookTickets from "./components/BookTickets.jsx";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE 
+console.log(API_BASE)
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("admin_jwt") || "");

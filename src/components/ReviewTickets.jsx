@@ -19,6 +19,7 @@ export default function ReviewTickets({ jwt }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     loadTickets();
@@ -51,10 +52,11 @@ export default function ReviewTickets({ jwt }) {
     }
   }
 
-  function updateTicketStatus(id, nextStatus) {
+  function updateTicket(id, nextTicket) {
+    if (!nextTicket) return;
     setTickets((prev) =>
       prev.map((ticket) =>
-        ticket.id === id ? { ...ticket, status: nextStatus } : ticket
+        ticket.id === id ? { ...ticket, ...nextTicket } : ticket
       )
     );
   }
@@ -70,7 +72,7 @@ export default function ReviewTickets({ jwt }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to approve ticket");
       if (data.ticket) {
-        updateTicketStatus(id, data.ticket.status);
+        updateTicket(id, data.ticket);
       }
     } catch (err) {
       alert(err.message);
@@ -95,7 +97,7 @@ export default function ReviewTickets({ jwt }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to cancel ticket");
       if (data.ticket) {
-        updateTicketStatus(id, data.ticket.status);
+        updateTicket(id, data.ticket);
       }
     } catch (err) {
       alert(err.message);
@@ -144,11 +146,25 @@ export default function ReviewTickets({ jwt }) {
         </div>
       );
     }
-    return (
-      <span className="status-label">
-        {ticket.status === "approved" ? "Ticket Approved" : "Ticket Cancelled"}
-      </span>
-    );
+
+    if (ticket.status === "approved") {
+      return (
+        <div className="action-status">
+          <span className="status-label success">Ticket Approved</span>
+          {!ticket.emailSent && (
+            <span className="status-hint danger">
+              Email failed to send — please retry
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    if (ticket.status === "cancelled") {
+      return <span className="status-label danger">Ticket Cancelled</span>;
+    }
+
+    return <span className="status-label">{ticket.status}</span>;
   }
 
   function changePage(nextPage) {
@@ -228,6 +244,7 @@ export default function ReviewTickets({ jwt }) {
       </div>
 
       {error && <div className="error">{error}</div>}
+      {message && <div className="message">{message}</div>}
 
       {loading ? (
         <div className="loading">Loading tickets...</div>
