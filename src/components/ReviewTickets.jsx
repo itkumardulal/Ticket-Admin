@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { toast } from "react-toastify";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 const STATUS_OPTIONS = [
@@ -8,6 +9,25 @@ const STATUS_OPTIONS = [
   { value: "cancelled", label: "Cancelled" },
 ];
 const PER_PAGE_OPTIONS = [10, 20, 50, 100];
+const SUPPORTED_STATUSES = new Set(["pending", "approved", "cancelled"]);
+
+function formatCurrency(amount) {
+  return `Rs. ${Number(amount || 0).toLocaleString()}`;
+}
+
+function formatDate(value) {
+  if (!value) return "--";
+  try {
+    return new Date(value).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch (e) {
+    return value;
+  }
+}
 
 export default function ReviewTickets({ jwt }) {
   const [tickets, setTickets] = useState([]);
@@ -15,11 +35,10 @@ export default function ReviewTickets({ jwt }) {
   const [error, setError] = useState("");
   const [processing, setProcessing] = useState(new Set());
   const [statusFilter, setStatusFilter] = useState("all");
-  const [perPage, setPerPage] = useState(20);
+  const [perPage, setPerPage] = useState(10);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const [message, setMessage] = useState("");
 
   useEffect(() => {
     loadTickets();
@@ -33,6 +52,7 @@ export default function ReviewTickets({ jwt }) {
       const params = new URLSearchParams({
         page: String(page),
         limit: String(perPage),
+        view: "review", // Tell backend this is review page
       });
       if (statusFilter !== "all") {
         params.append("status", statusFilter);
@@ -42,16 +62,17 @@ export default function ReviewTickets({ jwt }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load tickets");
-      setTickets(data.items || []);
+      setTickets(data.data || data.items || []);
       setTotalItems(data.totalItems || 0);
       setTotalPages(data.totalPages || 1);
     } catch (err) {
-      setError(err.message);
+      const message = err.message || "Failed to load tickets";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
   }
-
   function updateTicket(id, nextTicket) {
     if (!nextTicket) return;
     setTickets((prev) =>
@@ -74,8 +95,9 @@ export default function ReviewTickets({ jwt }) {
       if (data.ticket) {
         updateTicket(id, data.ticket);
       }
+      toast.success(data.message || "Ticket approved successfully");
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message || "Failed to approve ticket");
     } finally {
       setProcessing((prev) => {
         const next = new Set(prev);
@@ -87,7 +109,7 @@ export default function ReviewTickets({ jwt }) {
 
   async function cancelTicket(id) {
     if (processing.has(id)) return;
-    if (!confirm("Are you sure you want to cancel this ticket?")) return;
+    if (!window.confirm("Are you sure you want to cancel this ticket?")) return;
     setProcessing((prev) => new Set(prev).add(id));
     try {
       const res = await fetch(`${API_BASE}/api/admin/tickets/${id}/cancel`, {
@@ -99,12 +121,56 @@ export default function ReviewTickets({ jwt }) {
       if (data.ticket) {
         updateTicket(id, data.ticket);
       }
+      toast.success(data.message || "Ticket cancelled");
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message || "Failed to cancel ticket");
     } finally {
       setProcessing((prev) => {
         const next = new Set(prev);
         next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  async function sendWhatsApp(ticket) {
+    if (!ticket.phone) {
+      toast.error("Phone number not available for WhatsApp message");
+      return;
+    }
+    if (ticket.whatsappSent) {
+      toast.info("WhatsApp message already sent");
+      return;
+    }
+    if (processing.has(ticket.id)) return;
+    setProcessing((prev) => new Set(prev).add(ticket.id));
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/admin/tickets/${ticket.id}/whatsapp`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${jwt}` },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok)
+        throw new Error(data.error || "Failed to generate WhatsApp link");
+
+      // Open WhatsApp URL in new tab
+      if (data.whatsappUrl) {
+        window.open(data.whatsappUrl, "_blank", "noopener,noreferrer");
+      }
+
+      if (data.ticket) {
+        updateTicket(ticket.id, data.ticket);
+      }
+      toast.success("WhatsApp message opened successfully!");
+    } catch (err) {
+      toast.error(err.message || "Failed to send WhatsApp message");
+    } finally {
+      setProcessing((prev) => {
+        const next = new Set(prev);
+        next.delete(ticket.id);
         return next;
       });
     }
@@ -115,10 +181,10 @@ export default function ReviewTickets({ jwt }) {
   }
 
   const summary = useMemo(() => {
-    const totalPrice = tickets.reduce(
-      (acc, ticket) => acc + Number(ticket.price || 0),
-      0
-    );
+    const totalPrice = tickets.reduce((acc, ticket) => {
+      if (ticket.status === "cancelled") return acc;
+      return acc + Number(ticket.price || 0);
+    }, 0);
     return {
       count: tickets.length,
       totalPrice,
@@ -126,45 +192,57 @@ export default function ReviewTickets({ jwt }) {
   }, [tickets]);
 
   function renderActions(ticket) {
-    if (ticket.status === "pending") {
-      return (
-        <div className="ticket-actions">
-          <button
-            onClick={() => approveTicket(ticket.id)}
-            disabled={processing.has(ticket.id)}
-            className="btn-approve"
-          >
-            ✅ Approve
-          </button>
-          <button
-            onClick={() => cancelTicket(ticket.id)}
-            disabled={processing.has(ticket.id)}
-            className="btn-cancel"
-          >
-            ❌ Cancel
-          </button>
-        </div>
-      );
-    }
-
-    if (ticket.status === "approved") {
-      return (
-        <div className="action-status">
-          <span className="status-label success">Ticket Approved</span>
-          {!ticket.emailSent && (
-            <span className="status-hint danger">
-              Email failed to send — please retry
+    const actionable =
+      ticket.status === "approved" || ticket.status === "pending";
+    return (
+      <div className="ticket-actions">
+        <div className="primary-action-row">
+          {ticket.status === "pending" ? (
+            <>
+              <button
+                onClick={() => approveTicket(ticket.id)}
+                disabled={processing.has(ticket.id)}
+                className="btn-approve"
+                type="button"
+              >
+                ✅ Approve
+              </button>
+              <button
+                onClick={() => cancelTicket(ticket.id)}
+                disabled={processing.has(ticket.id)}
+                className="btn-cancel"
+                type="button"
+              >
+                ❌ Cancel
+              </button>
+            </>
+          ) : (
+            <span className={`status-label ${ticket.status}`}>
+              {ticket.status === "approved"
+                ? "Ticket Approved"
+                : ticket.status === "cancelled"
+                ? "Ticket Cancelled"
+                : ticket.status}
             </span>
           )}
         </div>
-      );
-    }
-
-    if (ticket.status === "cancelled") {
-      return <span className="status-label danger">Ticket Cancelled</span>;
-    }
-
-    return <span className="status-label">{ticket.status}</span>;
+        {actionable && (
+          <button
+            type="button"
+            className="btn-whatsapp action-stacked"
+            onClick={() => sendWhatsApp(ticket)}
+            disabled={ticket.whatsappSent || processing.has(ticket.id)}
+          >
+            {ticket.whatsappSent ? "✅ Message Sent" : "💬 WhatsApp"}
+          </button>
+        )}
+        {ticket.status === "approved" && !ticket.emailSent && (
+          <span className="status-hint danger">
+            Email failed to send — please retry
+          </span>
+        )}
+      </div>
+    );
   }
 
   function changePage(nextPage) {
@@ -180,12 +258,59 @@ export default function ReviewTickets({ jwt }) {
           key={i}
           className={i === page ? "active" : ""}
           onClick={() => changePage(i)}
+          type="button"
         >
           {i}
         </button>
       );
     }
     return pages;
+  }
+
+  function renderTicketCard(ticket, index) {
+    const serial = (page - 1) * perPage + index + 1;
+    return (
+      <article className="ticket-card" key={ticket.id}>
+        <header className="ticket-card-header">
+          <div>
+            <span className="ticket-serial">S.N. {serial}</span>
+            {typeof ticket.ticketNumber !== "undefined" && (
+              <span className="ticket-number">
+                Ticket #{ticket.ticketNumber ?? "--"}
+              </span>
+            )}
+            <h3>{ticket.name}</h3>
+            <p>{ticket.email}</p>
+            <p>{ticket.phone}</p>
+          </div>
+          <div className="ticket-card-meta">
+            {renderStatus(ticket.status)}
+            <span className="ticket-card-date">
+              Order At {formatDate(ticket.createdAt)}
+            </span>
+          </div>
+        </header>
+        <div className="ticket-card-body">
+          <div>
+            <span>Ticket Type</span>
+            <strong className="capitalize">{ticket.ticketType}</strong>
+          </div>
+          <div>
+            <span>Quantity</span>
+            <strong>{ticket.quantity}</strong>
+          </div>
+          <div>
+            <span>Total Price</span>
+            <strong>{formatCurrency(ticket.price)}</strong>
+          </div>
+          <div>
+            <span>Status</span>
+            <strong className="capitalize">{ticket.status}</strong>
+          </div>
+        </div>
+        <footer className="ticket-card-footer">{renderActions(ticket)}</footer>
+      </article>
+    );
   }
 
   return (
@@ -198,7 +323,7 @@ export default function ReviewTickets({ jwt }) {
             cancelled.
           </p>
         </div>
-        <button onClick={loadTickets} className="btn-refresh">
+        <button onClick={loadTickets} className="btn-refresh" type="button">
           Refresh
         </button>
       </div>
@@ -244,7 +369,6 @@ export default function ReviewTickets({ jwt }) {
       </div>
 
       {error && <div className="error">{error}</div>}
-      {message && <div className="message">{message}</div>}
 
       {loading ? (
         <div className="loading">Loading tickets...</div>
@@ -252,12 +376,15 @@ export default function ReviewTickets({ jwt }) {
         <div className="empty-state">No tickets found</div>
       ) : (
         <>
-          <div className="tickets-table-wrapper">
+          <div className="tickets-table-wrapper desktop-only">
             <table className="tickets-table">
               <thead>
                 <tr>
+                  <th>S.N.</th>
                   <th>Buyer</th>
+                  <th>Order At</th>
                   <th>Ticket Type</th>
+                  <th> Ticket Number</th>
                   <th>Quantity</th>
                   <th>Remaining</th>
                   <th>Scanned</th>
@@ -267,8 +394,9 @@ export default function ReviewTickets({ jwt }) {
                 </tr>
               </thead>
               <tbody>
-                {tickets.map((ticket) => (
+                {tickets.map((ticket, index) => (
                   <tr key={ticket.id}>
+                    <td>{(page - 1) * perPage + index + 1}</td>
                     <td>
                       <div className="buyer-cell">
                         <span className="buyer-name">{ticket.name}</span>
@@ -276,11 +404,13 @@ export default function ReviewTickets({ jwt }) {
                         <span className="buyer-meta">{ticket.phone}</span>
                       </div>
                     </td>
+                    <td>{formatDate(ticket.createdAt)}</td>
                     <td className="capitalize">{ticket.ticketType}</td>
+                    <td>{ticket.ticketNumber || "-"}</td>
                     <td>{ticket.quantity}</td>
                     <td>{ticket.remaining}</td>
                     <td>{ticket.scanCount}</td>
-                    <td>Rs. {Number(ticket.price || 0).toLocaleString()}</td>
+                    <td>{formatCurrency(ticket.price)}</td>
                     <td>{renderStatus(ticket.status)}</td>
                     <td>{renderActions(ticket)}</td>
                   </tr>
@@ -289,22 +419,30 @@ export default function ReviewTickets({ jwt }) {
             </table>
           </div>
 
+          <div className="ticket-card-grid mobile-only">
+            {tickets.map((ticket, index) => renderTicketCard(ticket, index))}
+          </div>
+
           <div className="table-summary">
             <span>
-              Showing {summary.count} ticket
-              {summary.count === 1 ? "" : "s"} | Total value: Rs.{" "}
-              {summary.totalPrice.toLocaleString()}
+              Total Records: {totalItems} | Total value (excluding cancelled):
+              {formatCurrency(summary.totalPrice)}
             </span>
           </div>
 
           <div className="pagination">
-            <button onClick={() => changePage(page - 1)} disabled={page === 1}>
+            <button
+              onClick={() => changePage(page - 1)}
+              disabled={page === 1}
+              type="button"
+            >
               Previous
             </button>
             {renderPageButtons()}
             <button
               onClick={() => changePage(page + 1)}
               disabled={page === totalPages}
+              type="button"
             >
               Next
             </button>
