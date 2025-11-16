@@ -236,8 +236,9 @@ export default function Scanner({ jwt }) {
         setPendingTicket(null);
       }
 
-      const ticketScanTime = data.ticket?.updatedAt
-        ? formatDateTime(data.ticket.updatedAt)
+      // Use lastScanAt only (never rely on updatedAt)
+      const ticketScanTime = data.ticket?.lastScanAt
+        ? formatDateTime(data.ticket.lastScanAt)
         : "";
       const hasCheckedInBefore = (data.ticket?.scanCount || 0) > 0;
 
@@ -249,32 +250,21 @@ export default function Scanner({ jwt }) {
         toast.info(data.message || "Enter number of people to check in.");
       } else {
         resetPending();
-        const fallbackTime = ticketScanTime || formatDateTime(new Date());
-        setLastScanTime(data.ticket ? fallbackTime : "");
+        // Use lastScanAt from ticket if available, otherwise empty
+        setLastScanTime(ticketScanTime || "");
         const remaining = data.ticket?.remaining ?? null;
 
-        if (data.status === "checked_in" || data.status === "valid") {
-          if (typeof remaining === "number" && remaining <= 0) {
-            toast.warning(
-              ticketScanTime
-                ? `${NO_REMAINING_MESSAGE} Last scanned at: ${ticketScanTime}.`
-                : `${NO_REMAINING_MESSAGE}`
-            );
-          } else {
-            toast.success(
-              ticketScanTime
-                ? `Ticket scanned successfully at ${ticketScanTime}`
-                : "Ticket scanned successfully"
-            );
-          }
+        if (data.status === "checked_in") {
+          // Use the message from backend which handles all scenarios
+          toast.success(data.message || "Ticket scanned successfully");
         } else if (data.status === "no_remaining") {
-          toast.warning(
-            ticketScanTime
-              ? `${NO_REMAINING_MESSAGE} Last scanned at: ${ticketScanTime}.`
-              : NO_REMAINING_MESSAGE
-          );
+          // Backend already includes lastScanAt in message
+          toast.warning(data.message || NO_REMAINING_MESSAGE);
         } else if (data.status === "cancelled") {
           toast.error(data.message || "Ticket is cancelled");
+        } else if (data.status === "valid") {
+          // This shouldn't happen for admin, but handle it
+          toast.success(data.message || "Ticket scanned successfully");
         } else {
           if (data.message) {
             toast.info(data.message);
@@ -470,8 +460,9 @@ export default function Scanner({ jwt }) {
                 <span>Scan Time</span>
                 <strong style={{ color: "#64748b" }}>
                   {lastScanTime ||
-                    formatDateTime(result.ticket.updatedAt) ||
-                    "--"}
+                    (result.ticket?.lastScanAt
+                      ? formatDateTime(result.ticket.lastScanAt)
+                      : "--")}
                 </strong>
               </li>
             </ul>

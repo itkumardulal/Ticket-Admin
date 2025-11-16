@@ -176,6 +176,19 @@ export default function ReviewTickets({ jwt }) {
     }
   }
 
+  async function copyQRLink(ticket) {
+    if (!ticket.qrImageUrl) {
+      toast.error("QR link not available for this ticket");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(ticket.qrImageUrl);
+      toast.success("QR link copied to clipboard!");
+    } catch (err) {
+      toast.error("Failed to copy QR link to clipboard");
+    }
+  }
+
   function renderStatus(status) {
     return <span className={`status-badge status-${status}`}>{status}</span>;
   }
@@ -272,11 +285,11 @@ export default function ReviewTickets({ jwt }) {
     return (
       <article className="ticket-card" key={ticket.id}>
         <header className="ticket-card-header">
+        <p className="ticket-serial">S.N. {serial}</p>
           <div>
-            <span className="ticket-serial">S.N. {serial}</span>
             {typeof ticket.ticketNumber !== "undefined" && (
               <span className="ticket-number">
-                Ticket #{ticket.ticketNumber ?? "--"}
+                Ticket No: {ticket.ticketNumber ?? "--"}
               </span>
             )}
             <h3>{ticket.name}</h3>
@@ -300,12 +313,31 @@ export default function ReviewTickets({ jwt }) {
             <strong>{ticket.quantity}</strong>
           </div>
           <div>
-            <span>Total Price</span>
-            <strong>{formatCurrency(ticket.price)}</strong>
+            <span>Remaining</span>
+            <strong>{ticket.remaining}</strong>
           </div>
           <div>
             <span>Status</span>
             <strong className="capitalize">{ticket.status}</strong>
+          </div>
+          <div>
+            <span>QR Link</span>
+            <strong>
+              {ticket.qrImageUrl ? (
+                <button
+                  type="button"
+                  className="btn-copy-qr"
+                  onClick={() => copyQRLink(ticket)}
+                  disabled={processing.has(ticket.id)}
+                  title="Copy QR Link"
+                  style={{ marginTop: "4px" }}
+                >
+                  📋 Copy
+                </button>
+              ) : (
+                "--"
+              )}
+            </strong>
           </div>
         </div>
         <footer className="ticket-card-footer">{renderActions(ticket)}</footer>
@@ -390,6 +422,7 @@ export default function ReviewTickets({ jwt }) {
                   <th>Scanned</th>
                   <th>Total Price</th>
                   <th>Status</th>
+                  <th>QR Link</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -412,6 +445,21 @@ export default function ReviewTickets({ jwt }) {
                     <td>{ticket.scanCount}</td>
                     <td>{formatCurrency(ticket.price)}</td>
                     <td>{renderStatus(ticket.status)}</td>
+                    <td>
+                      {ticket.qrImageUrl ? (
+                        <button
+                          type="button"
+                          className="btn-copy-qr"
+                          onClick={() => copyQRLink(ticket)}
+                          disabled={processing.has(ticket.id)}
+                          title="Copy QR Link"
+                        >
+                          📋 Copy
+                        </button>
+                      ) : (
+                        "--"
+                      )}
+                    </td>
                     <td>{renderActions(ticket)}</td>
                   </tr>
                 ))}

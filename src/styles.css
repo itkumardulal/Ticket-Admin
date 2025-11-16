@@ -1046,7 +1046,6 @@ button.secondary {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  margin-bottom: 6px;
 }
 
 .ticket-number {
@@ -1068,6 +1067,20 @@ button.secondary {
 
 .btn-whatsapp:hover:not(:disabled) {
   box-shadow: 0 14px 24px rgba(18, 140, 126, 0.3);
+}
+
+.btn-copy-qr {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: #ffffff;
+  padding: 11px 16px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-copy-qr:hover:not(:disabled) {
+  box-shadow: 0 14px 24px rgba(79, 70, 229, 0.3);
 }
 
 .status-label.approved {

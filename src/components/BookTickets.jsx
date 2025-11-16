@@ -148,7 +148,10 @@ export default function BookTickets({ jwt }) {
 
   function renderTicketCard(ticket, index) {
     const serial = (page - 1) * perPage + index + 1;
-    const lastScanTime = ticket.updatedAt ? formatDate(ticket.updatedAt) : "--";
+    const lastScanTime = ticket.lastScanAt
+      ? formatDate(ticket.lastScanAt)
+      : "--";
+    const orderAt = ticket.createdAt ? formatDate(ticket.createdAt) : "--";
     return (
       <article className="ticket-card" key={ticket.id}>
         <header className="ticket-card-header">
@@ -156,7 +159,7 @@ export default function BookTickets({ jwt }) {
             <span className="ticket-serial">S.N. {serial}</span>
             {typeof ticket.ticketNumber !== "undefined" && (
               <span className="ticket-number">
-                Ticket Number{ticket.ticketNumber ?? "--"}
+                Ticket #{ticket.ticketNumber ?? "--"}
               </span>
             )}
             <h3>{ticket.name}</h3>
@@ -165,10 +168,8 @@ export default function BookTickets({ jwt }) {
           </div>
           <div className="ticket-card-meta">
             {renderStatus(ticket.status)}
-            <span className="ticket-card-date">
-              Booked {formatDate(ticket.createdAt)}
-            </span>
-            <span className="ticket-card-date">Last Scan {lastScanTime}</span>
+            <span className="ticket-card-date">Order At: {orderAt}</span>
+            <span className="ticket-card-date">Last Scan: {lastScanTime}</span>
           </div>
         </header>
         <div className="ticket-card-body">
@@ -191,10 +192,6 @@ export default function BookTickets({ jwt }) {
           <div>
             <span>Total Price</span>
             <strong>{formatCurrency(ticket.price)}</strong>
-          </div>
-          <div>
-            <span>Last Scan</span>
-            <strong>{lastScanTime}</strong>
           </div>
         </div>
         <footer className="ticket-card-footer">
@@ -311,6 +308,7 @@ export default function BookTickets({ jwt }) {
                   <th>People</th>
                   <th>Checked In</th>
                   <th>Remaining</th>
+                  <th>Order At</th>
                   <th>Last Scan</th>
                   <th>Total Price</th>
                   <th>Status</th>
@@ -340,7 +338,10 @@ export default function BookTickets({ jwt }) {
                     <td>{ticket.scanCount}</td>
                     <td>{ticket.remaining}</td>
                     <td>
-                      {ticket.updatedAt ? formatDate(ticket.updatedAt) : "--"}
+                      {ticket.createdAt ? formatDate(ticket.createdAt) : "--"}
+                    </td>
+                    <td>
+                      {ticket.lastScanAt ? formatDate(ticket.lastScanAt) : "--"}
                     </td>
                     <td>{formatCurrency(ticket.price)}</td>
                     <td>{renderStatus(ticket.status)}</td>
@@ -350,7 +351,7 @@ export default function BookTickets({ jwt }) {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={8}>Total</td>
+                  <td colSpan={9}>Total</td>
                   <td>{formatCurrency(summary.totalPrice)}</td>
                   <td colSpan={2}></td>
                 </tr>
