@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ToastContainer } from "react-toastify";
 import Login from "./components/Login.jsx";
 import Scanner from "./components/Scanner.jsx";
 import ReviewTickets from "./components/ReviewTickets.jsx";
 import BookTickets from "./components/BookTickets.jsx";
+import { setRefreshTokenFunction } from "./utils/api.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
 
@@ -38,13 +39,17 @@ const VIEW_COPY = {
 };
 
 export default function App() {
-  const [token, setToken] = useState(localStorage.getItem("admin_jwt") || "");
+  // Store access token in memory only (useRef for persistence across renders)
+  const tokenRef = useRef("");
+  const [token, setToken] = useState("");
   const [activeView, setActiveView] = useState("scanner");
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const refreshPromiseRef = useRef(null);
 
+  // Sync ref with state and register refresh function
   useEffect(() => {
-    if (token) localStorage.setItem("admin_jwt", token);
-    else localStorage.removeItem("admin_jwt");
+    tokenRef.current = token;
+    setRefreshTokenFunction(refreshAccessToken);
   }, [token]);
 
   useEffect(() => {
@@ -56,20 +61,66 @@ export default function App() {
     [activeView]
   );
 
+  // Auto-refresh token when it expires
+  async function refreshAccessToken() {
+    // Prevent multiple simultaneous refresh calls
+    if (refreshPromiseRef.current) {
+      return refreshPromiseRef.current;
+    }
+
+    refreshPromiseRef.current = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/admin/refresh`, {
+          method: "POST",
+          credentials: "include", // Include cookies
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Token refresh failed");
+        }
+        setToken(data.accessToken);
+        return data.accessToken;
+      } catch (err) {
+        // Refresh failed - logout user
+        setToken("");
+        throw err;
+      } finally {
+        refreshPromiseRef.current = null;
+      }
+    })();
+
+    return refreshPromiseRef.current;
+  }
+
   async function handleLogin({ username, password }) {
     const res = await fetch(`${API_BASE}/api/admin/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include", // Include cookies for refresh token
       body: JSON.stringify({ username, password }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Login failed");
-    setToken(data.token);
+    // Store access token in memory only
+    setToken(data.accessToken);
   }
 
-  function logout() {
-    setToken("");
-    setActiveView("scanner");
+  async function logout() {
+    try {
+      // Call logout endpoint to revoke refresh token
+      if (tokenRef.current) {
+        await fetch(`${API_BASE}/api/admin/logout`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${tokenRef.current}` },
+          credentials: "include",
+        });
+      }
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      setToken("");
+      setActiveView("scanner");
+    }
   }
 
   function renderNavButton(item) {
