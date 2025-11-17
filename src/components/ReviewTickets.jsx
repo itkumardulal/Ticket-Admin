@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { toast } from "react-toastify";
 
-const API_BASE = import.meta.env.VITE_API_BASE ;
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
 const STATUS_OPTIONS = [
   { value: "all", label: "All" },
   { value: "pending", label: "Pending" },
@@ -177,15 +177,16 @@ export default function ReviewTickets({ jwt }) {
   }
 
   async function copyQRLink(ticket) {
-    if (!ticket.qrImageUrl) {
-      toast.error("QR link not available for this ticket");
+    const url = ticket.finalImageUrl || ticket.qrImageUrl;
+    if (!url) {
+      toast.error("Ticket image link not available for this ticket");
       return;
     }
     try {
-      await navigator.clipboard.writeText(ticket.qrImageUrl);
-      toast.success("QR link copied to clipboard!");
+      await navigator.clipboard.writeText(url);
+      toast.success("Ticket image link copied to clipboard!");
     } catch (err) {
-      toast.error("Failed to copy QR link to clipboard");
+      toast.error("Failed to copy link to clipboard");
     }
   }
 
@@ -285,7 +286,7 @@ export default function ReviewTickets({ jwt }) {
     return (
       <article className="ticket-card" key={ticket.id}>
         <header className="ticket-card-header">
-        <p className="ticket-serial">S.N. {serial}</p>
+          <p className="ticket-serial">S.N. {serial}</p>
           <div>
             {typeof ticket.ticketNumber !== "undefined" && (
               <span className="ticket-number">
@@ -321,15 +322,15 @@ export default function ReviewTickets({ jwt }) {
             <strong className="capitalize">{ticket.status}</strong>
           </div>
           <div>
-            <span>QR Link</span>
+            <span>URL Link</span>
             <strong>
-              {ticket.qrImageUrl ? (
+              {ticket.finalImageUrl || ticket.qrImageUrl ? (
                 <button
                   type="button"
-                  className="btn-copy-qr"
+                  className="copy-link-btn"
                   onClick={() => copyQRLink(ticket)}
                   disabled={processing.has(ticket.id)}
-                  title="Copy QR Link"
+                  title="Copy URL Link"
                   style={{ marginTop: "4px" }}
                 >
                   📋 Copy
@@ -346,157 +347,186 @@ export default function ReviewTickets({ jwt }) {
   }
 
   return (
-    <div className="review-tickets">
-      <div className="section-header">
-        <div>
-          <h2>Review Tickets</h2>
-          <p className="section-subtitle">
-            Pending tickets are listed first, followed by approved and
-            cancelled.
-          </p>
+    <>
+      <style>
+        {`
+          .copy-link-btn {
+            background: #007bff;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+          }
+          .copy-link-btn:hover:not(:disabled) {
+            background: #0056b3;
+          }
+          .copy-link-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+          }
+          .ticket-preview {
+            width: 100%;
+            max-width: 350px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          }
+        `}
+      </style>
+      <div className="review-tickets">
+        <div className="section-header">
+          <div>
+            <h2>Review Tickets</h2>
+            <p className="section-subtitle">
+              Pending tickets are listed first, followed by approved and
+              cancelled.
+            </p>
+          </div>
+          <button onClick={loadTickets} className="btn-refresh" type="button">
+            Refresh
+          </button>
         </div>
-        <button onClick={loadTickets} className="btn-refresh" type="button">
-          Refresh
-        </button>
-      </div>
 
-      <div className="filters-row">
-        <div className="filter-group">
-          <label htmlFor="status-filter">Filter by status</label>
-          <select
-            id="status-filter"
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+        <div className="filters-row">
+          <div className="filter-group">
+            <label htmlFor="status-filter">Filter by status</label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="filter-group">
+            <label htmlFor="per-page">Per page</label>
+            <select
+              id="per-page"
+              value={perPage}
+              onChange={(e) => {
+                setPerPage(Number(e.target.value));
+                setPage(1);
+              }}
+            >
+              {PER_PAGE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="filter-meta">
+            <span>Total Records: {totalItems}</span>
+          </div>
         </div>
-        <div className="filter-group">
-          <label htmlFor="per-page">Per page</label>
-          <select
-            id="per-page"
-            value={perPage}
-            onChange={(e) => {
-              setPerPage(Number(e.target.value));
-              setPage(1);
-            }}
-          >
-            {PER_PAGE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="filter-meta">
-          <span>Total Records: {totalItems}</span>
-        </div>
-      </div>
 
-      {error && <div className="error">{error}</div>}
+        {error && <div className="error">{error}</div>}
 
-      {loading ? (
-        <div className="loading">Loading tickets...</div>
-      ) : tickets.length === 0 ? (
-        <div className="empty-state">No tickets found</div>
-      ) : (
-        <>
-          <div className="tickets-table-wrapper desktop-only">
-            <table className="tickets-table">
-              <thead>
-                <tr>
-                  <th>S.N.</th>
-                  <th>Buyer</th>
-                  <th>Order At</th>
-                  <th>Ticket Type</th>
-                  <th> Ticket Number</th>
-                  <th>Quantity</th>
-                  <th>Remaining</th>
-                  <th>Scanned</th>
-                  <th>Total Price</th>
-                  <th>Status</th>
-                  <th>QR Link</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((ticket, index) => (
-                  <tr key={ticket.id}>
-                    <td>{(page - 1) * perPage + index + 1}</td>
-                    <td>
-                      <div className="buyer-cell">
-                        <span className="buyer-name">{ticket.name}</span>
-                        <span className="buyer-meta">{ticket.email}</span>
-                        <span className="buyer-meta">{ticket.phone}</span>
-                      </div>
-                    </td>
-                    <td>{formatDate(ticket.createdAt)}</td>
-                    <td className="capitalize">{ticket.ticketType}</td>
-                    <td>{ticket.ticketNumber || "-"}</td>
-                    <td>{ticket.quantity}</td>
-                    <td>{ticket.remaining}</td>
-                    <td>{ticket.scanCount}</td>
-                    <td>{formatCurrency(ticket.price)}</td>
-                    <td>{renderStatus(ticket.status)}</td>
-                    <td>
-                      {ticket.qrImageUrl ? (
-                        <button
-                          type="button"
-                          className="btn-copy-qr"
-                          onClick={() => copyQRLink(ticket)}
-                          disabled={processing.has(ticket.id)}
-                          title="Copy QR Link"
-                        >
-                          📋 Copy
-                        </button>
-                      ) : (
-                        "--"
-                      )}
-                    </td>
-                    <td>{renderActions(ticket)}</td>
+        {loading ? (
+          <div className="loading">Loading tickets...</div>
+        ) : tickets.length === 0 ? (
+          <div className="empty-state">No tickets found</div>
+        ) : (
+          <>
+            <div className="tickets-table-wrapper desktop-only">
+              <table className="tickets-table">
+                <thead>
+                  <tr>
+                    <th>S.N.</th>
+                    <th>Buyer</th>
+                    <th>Order At</th>
+                    <th>Ticket Type</th>
+                    <th> Ticket Number</th>
+                    <th>Quantity</th>
+                    <th>Remaining</th>
+                    <th>Scanned</th>
+                    <th>Total Price</th>
+                    <th>Status</th>
+                    <th>URL Link</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {tickets.map((ticket, index) => (
+                    <tr key={ticket.id}>
+                      <td>{(page - 1) * perPage + index + 1}</td>
+                      <td>
+                        <div className="buyer-cell">
+                          <span className="buyer-name">{ticket.name}</span>
+                          <span className="buyer-meta">{ticket.email}</span>
+                          <span className="buyer-meta">{ticket.phone}</span>
+                        </div>
+                      </td>
+                      <td>{formatDate(ticket.createdAt)}</td>
+                      <td className="capitalize">{ticket.ticketType}</td>
+                      <td>{ticket.ticketNumber || "-"}</td>
+                      <td>{ticket.quantity}</td>
+                      <td>{ticket.remaining}</td>
+                      <td>{ticket.scanCount}</td>
+                      <td>{formatCurrency(ticket.price)}</td>
+                      <td>{renderStatus(ticket.status)}</td>
+                      <td>
+                        {ticket.finalImageUrl || ticket.qrImageUrl ? (
+                          <button
+                            type="button"
+                            className="copy-link-btn"
+                            onClick={() => copyQRLink(ticket)}
+                            disabled={processing.has(ticket.id)}
+                            title="Copy URL Link"
+                          >
+                            📋 Copy
+                          </button>
+                        ) : (
+                          "--"
+                        )}
+                      </td>
+                      <td>{renderActions(ticket)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="ticket-card-grid mobile-only">
-            {tickets.map((ticket, index) => renderTicketCard(ticket, index))}
-          </div>
+            <div className="ticket-card-grid mobile-only">
+              {tickets.map((ticket, index) => renderTicketCard(ticket, index))}
+            </div>
 
-          <div className="table-summary">
-            <span>
-              Total Records: {totalItems} | Total value (excluding cancelled):
-              {formatCurrency(summary.totalPrice)}
-            </span>
-          </div>
+            <div className="table-summary">
+              <span>
+                Total Records: {totalItems} | Total value (excluding cancelled):
+                {formatCurrency(summary.totalPrice)}
+              </span>
+            </div>
 
-          <div className="pagination">
-            <button
-              onClick={() => changePage(page - 1)}
-              disabled={page === 1}
-              type="button"
-            >
-              Previous
-            </button>
-            {renderPageButtons()}
-            <button
-              onClick={() => changePage(page + 1)}
-              disabled={page === totalPages}
-              type="button"
-            >
-              Next
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+            <div className="pagination">
+              <button
+                onClick={() => changePage(page - 1)}
+                disabled={page === 1}
+                type="button"
+              >
+                Previous
+              </button>
+              {renderPageButtons()}
+              <button
+                onClick={() => changePage(page + 1)}
+                disabled={page === totalPages}
+                type="button"
+              >
+                Next
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }

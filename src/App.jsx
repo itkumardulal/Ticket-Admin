@@ -56,51 +56,6 @@ export default function App() {
     setSidebarOpen(false);
   }, [activeView, token]);
 
-  // Auto-refresh access token on page load
-  useEffect(() => {
-    async function attemptSilentRefresh() {
-      try {
-        const res = await fetch(`${API_BASE}/api/admin/refresh`, {
-          method: "POST",
-          credentials: "include", // Include cookies
-        });
-        const data = await res.json();
-        if (res.ok) {
-          // Success: store new access token in memory
-          setToken(data.accessToken);
-        } else if (res.status === 401) {
-          // 401 from refresh: clear token and stay on login
-          setToken("");
-        } else {
-          // Other errors: retry once
-          try {
-            const retryRes = await fetch(`${API_BASE}/api/admin/refresh`, {
-              method: "POST",
-              credentials: "include",
-            });
-            const retryData = await retryRes.json();
-            if (retryRes.ok) {
-              setToken(retryData.accessToken);
-            } else if (retryRes.status === 401) {
-              setToken("");
-            }
-          } catch (retryErr) {
-            // Retry failed, clear token
-            setToken("");
-          }
-        }
-      } catch (err) {
-        // Network or other errors: clear token
-        setToken("");
-      }
-    }
-    // Only attempt refresh if we don't have a token
-    if (!token) {
-      attemptSilentRefresh();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run once on mount
-
   const headerCopy = useMemo(
     () => VIEW_COPY[activeView] || VIEW_COPY.scanner,
     [activeView]
@@ -121,19 +76,12 @@ export default function App() {
         });
         const data = await res.json();
         if (!res.ok) {
-          // Handle 401 specifically
-          if (res.status === 401) {
-            // Clear memory access token
-            setToken("");
-            throw new Error("Refresh token expired or invalid");
-          }
           throw new Error(data.error || "Token refresh failed");
         }
-        // Store new access token in memory
         setToken(data.accessToken);
         return data.accessToken;
       } catch (err) {
-        // Refresh failed - clear token
+        // Refresh failed - logout user
         setToken("");
         throw err;
       } finally {
