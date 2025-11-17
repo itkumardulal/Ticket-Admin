@@ -3,7 +3,7 @@ import { Html5Qrcode } from "html5-qrcode";
 import { toast } from "react-toastify";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
-const NO_REMAINING_MESSAGE = "Tickets already scanned — no people remaining.";
+const NO_REMAINING_MESSAGE = "Ticket already scanned — no people remaining.";
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -228,7 +228,6 @@ export default function Scanner({ jwt }) {
       }
 
       setResult(data);
-      setMessage(data.message || data.status);
 
       if (data.ticket) {
         setPendingTicket(data.ticket);
@@ -241,13 +240,20 @@ export default function Scanner({ jwt }) {
         ? formatDateTime(data.ticket.lastScanAt)
         : "";
       const hasCheckedInBefore = (data.ticket?.scanCount || 0) > 0;
+      let nextMessage = data.message || data.status;
+      if (data.status === "no_remaining") {
+        nextMessage = ticketScanTime
+          ? `${NO_REMAINING_MESSAGE} Last scan time: ${ticketScanTime}.`
+          : NO_REMAINING_MESSAGE;
+      }
+      setMessage(nextMessage);
 
       if (data.status === "awaiting_count") {
         setPendingToken(token);
         const remaining = data.ticket?.remaining || 1;
         setCountInput(clampCount(remaining, remaining));
         setLastScanTime(hasCheckedInBefore ? ticketScanTime : "");
-        toast.info(data.message || "Enter number of people to check in.");
+        toast.info(nextMessage || "Enter number of people to check in.");
       } else {
         resetPending();
         // Use lastScanAt from ticket if available, otherwise empty
@@ -256,18 +262,17 @@ export default function Scanner({ jwt }) {
 
         if (data.status === "checked_in") {
           // Use the message from backend which handles all scenarios
-          toast.success(data.message || "Ticket scanned successfully");
+          toast.success(nextMessage || "Ticket scanned successfully");
         } else if (data.status === "no_remaining") {
-          // Backend already includes lastScanAt in message
-          toast.warning(data.message || NO_REMAINING_MESSAGE);
+          toast.warning(nextMessage);
         } else if (data.status === "cancelled") {
-          toast.error(data.message || "Ticket is cancelled");
+          toast.error(nextMessage || "Ticket is cancelled");
         } else if (data.status === "valid") {
           // This shouldn't happen for admin, but handle it
-          toast.success(data.message || "Ticket scanned successfully");
+          toast.success(nextMessage || "Ticket scanned successfully");
         } else {
-          if (data.message) {
-            toast.info(data.message);
+          if (nextMessage) {
+            toast.info(nextMessage);
           }
         }
       }
