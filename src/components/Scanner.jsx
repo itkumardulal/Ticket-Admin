@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { toast } from "react-toastify";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE;
 const NO_REMAINING_MESSAGE = "Tickets already scanned — no people remaining.";
 
 function formatDateTime(value) {
