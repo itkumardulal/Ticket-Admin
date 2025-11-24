@@ -39,11 +39,26 @@ export default function ReviewTickets({ jwt }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  // Debounce search input (400ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     loadTickets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, perPage, page]);
+  }, [statusFilter, perPage, page, debouncedSearch]);
 
   async function loadTickets() {
     setLoading(true);
@@ -57,13 +72,17 @@ export default function ReviewTickets({ jwt }) {
       if (statusFilter !== "all") {
         params.append("status", statusFilter);
       }
+      const searchValue = debouncedSearch.trim();
+      if (searchValue) {
+        params.append("search", searchValue);
+      }
       const res = await fetch(`${API_BASE}/api/admin/tickets?${params}`, {
         headers: { Authorization: `Bearer ${jwt}` },
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load tickets");
       setTickets(data.data || data.items || []);
-      setTotalItems(data.totalItems || 0);
+      setTotalItems(data.totalItems || data.totalCount || 0);
       setTotalPages(data.totalPages || 1);
     } catch (err) {
       const message = err.message || "Failed to load tickets";
@@ -391,6 +410,27 @@ export default function ReviewTickets({ jwt }) {
 
         <div className="filters-row">
           <div className="filter-group">
+            <label htmlFor="search-review-input">Search</label>
+            <input
+              id="search-review-input"
+              type="text"
+              placeholder="Search by name, email, phone..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setPage(1);
+              }}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "6px",
+                border: "1px solid #ddd",
+                fontSize: "14px",
+                width: "100%",
+                maxWidth: "300px",
+              }}
+            />
+          </div>
+          <div className="filter-group">
             <label htmlFor="status-filter">Filter by status</label>
             <select
               id="status-filter"
@@ -434,7 +474,7 @@ export default function ReviewTickets({ jwt }) {
         {loading ? (
           <div className="loading">Loading tickets...</div>
         ) : tickets.length === 0 ? (
-          <div className="empty-state">No tickets found</div>
+          <div className="empty-state">No data available.</div>
         ) : (
           <>
             <div className="tickets-table-wrapper desktop-only">

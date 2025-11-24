@@ -45,6 +45,7 @@ export default function App() {
   const [activeView, setActiveView] = useState("scanner");
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const refreshPromiseRef = useRef(null);
+  const initialRefreshAttemptedRef = useRef(false);
 
   // Sync ref with state and register refresh function
   useEffect(() => {
@@ -55,6 +56,13 @@ export default function App() {
   useEffect(() => {
     setSidebarOpen(false);
   }, [activeView, token]);
+
+  useEffect(() => {
+    if (initialRefreshAttemptedRef.current) return;
+    initialRefreshAttemptedRef.current = true;
+    refreshAccessToken().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const headerCopy = useMemo(
     () => VIEW_COPY[activeView] || VIEW_COPY.scanner,

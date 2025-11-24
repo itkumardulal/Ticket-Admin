@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
@@ -16,6 +16,12 @@ const QUICK_FILTERS = [
 ];
 
 const PER_PAGE_OPTIONS = [10, 20, 50, 100];
+
+const DEFAULT_SUMMARY = {
+  totalPeople: 0,
+  totalRemaining: 0,
+  totalScanned: 0,
+};
 
 function formatCurrency(amount) {
   return `Rs. ${Number(amount || 0).toLocaleString()}`;
@@ -46,11 +52,28 @@ export default function BookTickets({ jwt }) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
+  const [overallTotalValue, setOverallTotalValue] = useState(0);
+
+  // Debounce search input (400ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     loadTickets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, page, quickFilter]);
+  }, [statusFilter, page, quickFilter, perPage, debouncedSearch]);
 
   async function loadTickets() {
     setLoading(true);
@@ -67,6 +90,10 @@ export default function BookTickets({ jwt }) {
       if (quickFilter !== "all") {
         params.append("quickFilter", quickFilter);
       }
+      const searchValue = debouncedSearch.trim();
+      if (searchValue) {
+        params.append("search", searchValue);
+      }
       const res = await fetch(`${API_BASE}/api/admin/tickets?${params}`, {
         headers: { Authorization: `Bearer ${jwt}` },
       });
@@ -74,8 +101,48 @@ export default function BookTickets({ jwt }) {
       if (!res.ok) throw new Error(data.error || "Failed to load tickets");
 
       setTickets(data.data || data.items || []);
-      setTotalItems(data.totalItems || 0);
+      setTotalItems(data.totalItems || data.totalCount || 0);
       setTotalPages(data.totalPages || 1);
+      // Update summary from backend if available (calculated from ALL matching tickets)
+      if (data.summary) {
+        setSummary({
+          totalPeople: data.summary.totalPeople ?? 0,
+          totalRemaining: data.summary.totalRemaining ?? 0,
+          totalScanned: data.summary.totalScanned ?? 0,
+        });
+        const aggregatedTotal =
+          typeof data.totalValue === "number"
+            ? data.totalValue
+            : data.summary.totalValue ?? data.summary.totalPrice ?? 0;
+        setOverallTotalValue(aggregatedTotal);
+      } else {
+        // Fallback to calculating from current page if backend summary not available
+        const pageItems = data.data || data.items || [];
+        const totalPeople = pageItems.reduce(
+          (acc, ticket) => acc + Number(ticket.quantity || 0),
+          0
+        );
+        const totalRemaining = pageItems.reduce(
+          (acc, ticket) => acc + Number(ticket.remaining || 0),
+          0
+        );
+        const totalScanned = pageItems.reduce(
+          (acc, ticket) => acc + Number(ticket.scanCount || 0),
+          0
+        );
+        const totalPrice = pageItems.reduce(
+          (acc, ticket) => acc + Number(ticket.price || 0),
+          0
+        );
+        setSummary({
+          totalPeople,
+          totalRemaining,
+          totalScanned,
+        });
+        setOverallTotalValue(
+          typeof data.totalValue === "number" ? data.totalValue : totalPrice
+        );
+      }
     } catch (err) {
       const message = err.message || "Failed to load tickets";
       setError(message);
@@ -106,31 +173,6 @@ export default function BookTickets({ jwt }) {
     }
     return pages;
   }
-
-  const summary = useMemo(() => {
-    const totalPeople = tickets.reduce(
-      (acc, ticket) => acc + Number(ticket.quantity || 0),
-      0
-    );
-    const totalRemaining = tickets.reduce(
-      (acc, ticket) => acc + Number(ticket.remaining || 0),
-      0
-    );
-    const totalScanned = tickets.reduce(
-      (acc, ticket) => acc + Number(ticket.scanCount || 0),
-      0
-    );
-    const totalPrice = tickets.reduce(
-      (acc, ticket) => acc + Number(ticket.price || 0),
-      0
-    );
-    return {
-      totalPeople,
-      totalRemaining,
-      totalScanned,
-      totalPrice,
-    };
-  }, [tickets]);
 
   function renderStatus(status) {
     return <span className={`status-badge status-${status}`}>{status}</span>;
@@ -217,6 +259,27 @@ export default function BookTickets({ jwt }) {
 
       <div className="filters-row">
         <div className="filter-group">
+          <label htmlFor="search-book-input">Search</label>
+          <input
+            id="search-book-input"
+            type="text"
+            placeholder="Search by name, email, phone..."
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
+            style={{
+              padding: "8px 12px",
+              borderRadius: "6px",
+              border: "1px solid #ddd",
+              fontSize: "14px",
+              width: "100%",
+              maxWidth: "300px",
+            }}
+          />
+        </div>
+        <div className="filter-group">
           <label htmlFor="status-book-filter">Status</label>
           <select
             id="status-book-filter"
@@ -287,14 +350,14 @@ export default function BookTickets({ jwt }) {
         </div>
         <div className="metric-card">
           <p>Total Value</p>
-          <h3>{formatCurrency(summary.totalPrice)}</h3>
+          <h3>{formatCurrency(overallTotalValue)}</h3>
         </div>
       </div>
 
       {loading ? (
         <div className="loading">Loading tickets...</div>
       ) : tickets.length === 0 ? (
-        <div className="empty-state">No tickets found for this filter.</div>
+        <div className="empty-state">No data available.</div>
       ) : (
         <>
           <div className="tickets-table-wrapper desktop-only">
@@ -352,7 +415,7 @@ export default function BookTickets({ jwt }) {
               <tfoot>
                 <tr>
                   <td colSpan={9}>Total</td>
-                  <td>{formatCurrency(summary.totalPrice)}</td>
+                  <td>{formatCurrency(overallTotalValue)}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
