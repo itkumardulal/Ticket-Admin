@@ -196,12 +196,13 @@ export default function BookTickets({ jwt }) {
     const orderAt = ticket.createdAt ? formatDate(ticket.createdAt) : "--";
     return (
       <article className="ticket-card" key={ticket.id}>
+        <p className="ticket-serial">S.N. {serial}</p>
         <header className="ticket-card-header">
           <div>
-            <span className="ticket-serial">S.N. {serial}</span>
+            
             {typeof ticket.ticketNumber !== "undefined" && (
               <span className="ticket-number">
-                Ticket #{ticket.ticketNumber ?? "--"}
+                Ticket No{ticket.ticketNumber ?? "--"}
               </span>
             )}
             <h3>{ticket.name}</h3>

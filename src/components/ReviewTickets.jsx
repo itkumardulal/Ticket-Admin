@@ -304,8 +304,8 @@ export default function ReviewTickets({ jwt }) {
     const serial = (page - 1) * perPage + index + 1;
     return (
       <article className="ticket-card" key={ticket.id}>
+         <p className="ticket-serial">S.N. {serial}</p>
         <header className="ticket-card-header">
-          <p className="ticket-serial">S.N. {serial}</p>
           <div>
             {typeof ticket.ticketNumber !== "undefined" && (
               <span className="ticket-number">
