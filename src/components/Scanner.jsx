@@ -17,7 +17,7 @@ function formatDateTime(value) {
   });
 }
 
-export default function Scanner({ jwt }) {
+export default function Scanner({ jwt, autoStart = false }) {
   const [message, setMessage] = useState("");
   const [result, setResult] = useState(null);
   const [scanning, setScanning] = useState(false);
@@ -33,6 +33,7 @@ export default function Scanner({ jwt }) {
   const fileInputRef = useRef(null);
   const processingRef = useRef(false);
   const isScanningRef = useRef(false);
+  const autoStartAttemptedRef = useRef(false);
 
   useEffect(() => {
     scannerRef.current = document.getElementById("qr-region");
@@ -66,6 +67,22 @@ export default function Scanner({ jwt }) {
       }
     };
   }, []);
+
+  // Auto-start camera when autoStart prop is true and camera is ready (mobile only)
+  useEffect(() => {
+    if (autoStart && cameraId && !scanning && !isScanningRef.current && !autoStartAttemptedRef.current) {
+      autoStartAttemptedRef.current = true;
+      // Small delay to ensure component is fully mounted
+      const timer = setTimeout(() => {
+        startScan();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    // Reset the ref when autoStart becomes false
+    if (!autoStart) {
+      autoStartAttemptedRef.current = false;
+    }
+  }, [autoStart, cameraId, scanning]);
 
   async function startScan() {
     if (scanning || isScanningRef.current) return;
@@ -299,9 +316,21 @@ export default function Scanner({ jwt }) {
     await processVerification(pendingToken, nextCount);
   }
 
+  // Check if we're on mobile
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 1023);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   return (
-    <div className="scanner">
-      <div className="scanner-controls">
+    <div className={`scanner ${autoStart && isMobile ? "mobile-auto-scan" : ""}`}>
+      <div className={`scanner-controls ${autoStart && isMobile ? "hide-on-mobile-auto" : ""}`}>
         <label className="field">
           <span>Camera</span>
           <select

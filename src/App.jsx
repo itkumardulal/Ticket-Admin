@@ -44,8 +44,14 @@ export default function App() {
   const [token, setToken] = useState("");
   const [activeView, setActiveView] = useState("scanner");
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [autoStartCamera, setAutoStartCamera] = useState(false);
+  const [isFooterVisible, setIsFooterVisible] = useState(true);
+  const [isHeaderVisible, setIsHeaderVisible] = useState(true);
   const refreshPromiseRef = useRef(null);
   const initialRefreshAttemptedRef = useRef(false);
+  const lastScrollY = useRef(0);
+  const scrollTimeout = useRef(null);
+  const headerScrollTimeout = useRef(null);
 
   // Sync ref with state and register refresh function
   useEffect(() => {
@@ -56,6 +62,84 @@ export default function App() {
   useEffect(() => {
     setSidebarOpen(false);
   }, [activeView, token]);
+
+  // Reset auto-start flag when view changes away from scanner
+  useEffect(() => {
+    if (activeView !== "scanner") {
+      setAutoStartCamera(false);
+    }
+  }, [activeView]);
+
+  // Handle scroll to show/hide footer and header
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const scrollDifference = currentScrollY - lastScrollY.current;
+
+      // Clear existing timeouts
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
+      }
+      if (headerScrollTimeout.current) {
+        clearTimeout(headerScrollTimeout.current);
+      }
+
+      // Show footer when scrolling up, hide when scrolling down
+      if (scrollDifference > 0 && currentScrollY > 100) {
+        // Scrolling down - hide footer
+        setIsFooterVisible(false);
+      } else if (scrollDifference < 0) {
+        // Scrolling up - show footer
+        setIsFooterVisible(true);
+      }
+
+      // Show header when scrolling up, hide when scrolling down
+      if (scrollDifference > 0 && currentScrollY > 100) {
+        // Scrolling down - hide header
+        setIsHeaderVisible(false);
+      } else if (scrollDifference < 0) {
+        // Scrolling up - show header
+        setIsHeaderVisible(true);
+      }
+
+      // Always show footer and header at the top
+      if (currentScrollY < 50) {
+        setIsFooterVisible(true);
+        setIsHeaderVisible(true);
+      }
+
+      lastScrollY.current = currentScrollY;
+
+      // Set timeout to show footer after scrolling stops (optional)
+      scrollTimeout.current = setTimeout(() => {
+        if (currentScrollY > 100) {
+          setIsFooterVisible(true);
+        }
+      }, 1500);
+
+      // Set timeout to show header after scrolling stops (optional)
+      headerScrollTimeout.current = setTimeout(() => {
+        if (currentScrollY > 100) {
+          setIsHeaderVisible(true);
+        }
+      }, 1500);
+    };
+
+    // Only add scroll listener on mobile
+    const isMobile = window.innerWidth <= 1023;
+    if (isMobile) {
+      window.addEventListener("scroll", handleScroll, { passive: true });
+      return () => {
+        window.removeEventListener("scroll", handleScroll);
+        if (scrollTimeout.current) {
+          clearTimeout(scrollTimeout.current);
+        }
+        if (headerScrollTimeout.current) {
+          clearTimeout(headerScrollTimeout.current);
+        }
+      };
+    }
+  }, []);
 
   useEffect(() => {
     if (initialRefreshAttemptedRef.current) return;
@@ -206,7 +290,7 @@ export default function App() {
             role="presentation"
           />
           <div className="main-area">
-            <header className="main-header">
+            <header className={`main-header ${isHeaderVisible ? "visible" : "hidden"}`}>
               <button
                 type="button"
                 className="menu-toggle"
@@ -228,26 +312,32 @@ export default function App() {
               </button>
             </header>
             <main className="main-content">
-              {activeView === "scanner" && <Scanner jwt={token} />}
+              {activeView === "scanner" && (
+                <Scanner jwt={token} autoStart={autoStartCamera} />
+              )}
               {activeView === "review" && <ReviewTickets jwt={token} />}
               {activeView === "book" && <BookTickets jwt={token} />}
             </main>
           </div>
-          <nav className="bottom-nav">
-            <div className="bottom-nav-header">
-              <span className="logo-circle">🎵</span>
-              <div>
-                <strong>Sindhuli Admin</strong>
-                <small>BrotherHood Nepal • NLT</small>
-              </div>
-            </div>
+          <nav className={`bottom-nav ${isFooterVisible ? "visible" : "hidden"}`}>
             <div className="bottom-nav-actions">
               {BOTTOM_NAV_ITEMS.map(renderBottomNavButton)}
-              <button type="button" className="logout" onClick={logout}>
-                <span className="nav-icon" aria-hidden="true">
-                  🚪
+              <button 
+                type="button" 
+                className={activeView === "scanner" ? "active camera-button" : "camera-button"} 
+                onClick={() => {
+                  // Check if we're on mobile (screen width <= 1023px)
+                  const isMobile = window.innerWidth <= 1023;
+                  if (isMobile) {
+                    setAutoStartCamera(true);
+                  }
+                  setActiveView("scanner");
+                }}
+              >
+                <span className="camera-icon" aria-hidden="true">
+                  📷
                 </span>
-                <small>Logout</small>
+                <small>Scanner</small>
               </button>
             </div>
           </nav>
