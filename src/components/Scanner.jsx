@@ -100,7 +100,7 @@ export default function Scanner({ jwt, autoStart = false }) {
         : { facingMode: "environment" };
       const config = {
         fps: 8,
-        qrbox: 250,
+        qrbox: 320,
         aspectRatio: 1.777,
         rememberLastUsedCamera: true,
         videoConstraints: {
