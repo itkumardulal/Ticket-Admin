@@ -42,7 +42,20 @@ function formatDate(value) {
   }
 }
 
-export default function BookTickets({ jwt }) {
+const EATSTREET_KEY = "eatstreet";
+
+function getDisplayTicketType(ticketType, eventKey) {
+  if (
+    typeof ticketType === "string" &&
+    ticketType.toLowerCase() === "normal" &&
+    (eventKey || "").toLowerCase() === EATSTREET_KEY
+  ) {
+    return "pre sale";
+  }
+  return ticketType;
+}
+
+export default function BookTickets({ jwt, eventKey = "default" }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -218,7 +231,9 @@ export default function BookTickets({ jwt }) {
         <div className="ticket-card-body">
           <div>
             <span>Ticket Type</span>
-            <strong className="capitalize">{ticket.ticketType}</strong>
+            <strong className="capitalize">
+              {getDisplayTicketType(ticket.ticketType, eventKey)}
+            </strong>
           </div>
           <div>
             <span>Quantity</span>
@@ -387,7 +402,7 @@ export default function BookTickets({ jwt }) {
                     <td>
                       <div className="ticket-cell">
                         <span className="badge capitalize">
-                          {ticket.ticketType}
+                          {getDisplayTicketType(ticket.ticketType, eventKey)}
                         </span>
                       </div>
                     </td>

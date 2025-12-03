@@ -10,6 +10,7 @@ const STATUS_OPTIONS = [
 ];
 const PER_PAGE_OPTIONS = [10, 20, 50, 100];
 const SUPPORTED_STATUSES = new Set(["pending", "approved", "cancelled"]);
+const EATSTREET_KEY = "eatstreet";
 
 function formatCurrency(amount) {
   return `Rs. ${Number(amount || 0).toLocaleString()}`;
@@ -29,7 +30,18 @@ function formatDate(value) {
   }
 }
 
-export default function ReviewTickets({ jwt }) {
+function getDisplayTicketType(ticketType, eventKey) {
+  if (
+    typeof ticketType === "string" &&
+    ticketType.toLowerCase() === "normal" &&
+    (eventKey || "").toLowerCase() === EATSTREET_KEY
+  ) {
+    return "pre sale";
+  }
+  return ticketType;
+}
+
+export default function ReviewTickets({ jwt, eventKey = "default" }) {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -326,7 +338,9 @@ export default function ReviewTickets({ jwt }) {
         <div className="ticket-card-body">
           <div>
             <span>Ticket Type</span>
-            <strong className="capitalize">{ticket.ticketType}</strong>
+            <strong className="capitalize">
+              {getDisplayTicketType(ticket.ticketType, eventKey)}
+            </strong>
           </div>
           <div>
             <span>Quantity</span>
@@ -507,7 +521,9 @@ export default function ReviewTickets({ jwt }) {
                         </div>
                       </td>
                       <td>{formatDate(ticket.createdAt)}</td>
-                      <td className="capitalize">{ticket.ticketType}</td>
+                      <td className="capitalize">
+                        {getDisplayTicketType(ticket.ticketType, eventKey)}
+                      </td>
                       <td>{ticket.ticketNumber || "-"}</td>
                       <td>{ticket.quantity}</td>
                       <td>{ticket.remaining}</td>

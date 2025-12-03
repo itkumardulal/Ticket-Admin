@@ -4,6 +4,18 @@ import { toast } from "react-toastify";
 
 const API_BASE = import.meta.env.VITE_API_BASE;
 const NO_REMAINING_MESSAGE = "Ticket already scanned — no people remaining.";
+const EATSTREET_KEY = "eatstreet";
+
+function getDisplayTicketType(ticketType, eventKey) {
+  if (
+    typeof ticketType === "string" &&
+    ticketType.toLowerCase() === "normal" &&
+    (eventKey || "").toLowerCase() === EATSTREET_KEY
+  ) {
+    return "pre sale";
+  }
+  return ticketType;
+}
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -17,7 +29,7 @@ function formatDateTime(value) {
   });
 }
 
-export default function Scanner({ jwt, autoStart = false }) {
+export default function Scanner({ jwt, autoStart = false, eventKey = "default" }) {
   const [message, setMessage] = useState("");
   const [result, setResult] = useState(null);
   const [scanning, setScanning] = useState(false);
@@ -165,13 +177,21 @@ export default function Scanner({ jwt, autoStart = false }) {
       setScanning(false);
     }
     try {
-      let payload;
+      let token = "";
+      // 1) Try JSON { token: "..." } format
       try {
-        payload = JSON.parse(decodedText);
+        const payload = JSON.parse(decodedText);
+        token = payload?.token || "";
       } catch {
-        payload = { token: decodedText };
+        // 2) If it's a URL with ?token=... or ?t=..., extract token param
+        try {
+          const url = new URL(decodedText);
+          token = url.searchParams.get("token") || url.searchParams.get("t") || "";
+        } catch {
+          // 3) Fallback: treat whole decoded text as token
+          token = decodedText;
+        }
       }
-      const token = payload.token;
       if (!token) {
         throw new Error("Invalid QR format");
       }
@@ -471,7 +491,7 @@ export default function Scanner({ jwt, autoStart = false }) {
               <li>
                 <span>Ticket Type</span>
                 <strong className="capitalize">
-                  {result.ticket.ticketType}
+                  {getDisplayTicketType(result.ticket.ticketType, eventKey)}
                 </strong>
               </li>
               <li>

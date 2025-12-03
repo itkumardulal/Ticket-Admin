@@ -4,6 +4,7 @@ import Login from "./components/Login.jsx";
 import Scanner from "./components/Scanner.jsx";
 import ReviewTickets from "./components/ReviewTickets.jsx";
 import BookTickets from "./components/BookTickets.jsx";
+import SettleMenu from "./components/SettleMenu.jsx";
 import { setRefreshTokenFunction } from "./utils/api.js";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "";
@@ -12,12 +13,13 @@ const NAV_ITEMS = [
   { id: "scanner", label: "Scan Tickets", icon: "📷" },
   { id: "review", label: "Review Tickets", icon: "📋" },
   { id: "book", label: "Book Tickets", icon: "🎫" },
+  { id: "settle", label: "Settle Menu", icon: "💰", eatstreetOnly: true },
 ];
 
 const BOTTOM_NAV_ITEMS = [
-  { id: "scanner", label: "Home", icon: "🏠" },
   { id: "review", label: "Review", icon: "📋" },
   { id: "book", label: "Bookings", icon: "🎫" },
+  { id: "settle", label: "Settle", icon: "💰", eatstreetOnly: true },
 ];
 
 const VIEW_COPY = {
@@ -36,12 +38,34 @@ const VIEW_COPY = {
     subtitle:
       "Monitor booking health, track attendance, and stay ahead of event demand.",
   },
+  settle: {
+    title: "Settle Menu",
+    subtitle:
+      "View approved ticket revenue and settlement amount for this event.",
+  },
 };
+
+function extractEventKeyFromToken(jwt = "") {
+  if (!jwt || typeof jwt !== "string") return "default";
+  const parts = jwt.split(".");
+  if (parts.length < 2) return "default";
+  try {
+    const payload = JSON.parse(atob(parts[1]));
+    const eventKey = payload?.eventKey;
+    if (typeof eventKey === "string" && eventKey.trim()) {
+      return eventKey.toLowerCase();
+    }
+  } catch (err) {
+    console.warn("Failed to parse access token payload:", err);
+  }
+  return "default";
+}
 
 export default function App() {
   // Store access token in memory only (useRef for persistence across renders)
   const tokenRef = useRef("");
   const [token, setToken] = useState("");
+  const [eventKey, setEventKey] = useState("default");
   const [activeView, setActiveView] = useState("scanner");
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [autoStartCamera, setAutoStartCamera] = useState(false);
@@ -57,6 +81,7 @@ export default function App() {
   useEffect(() => {
     tokenRef.current = token;
     setRefreshTokenFunction(refreshAccessToken);
+    setEventKey(token ? extractEventKeyFromToken(token) : "default");
   }, [token]);
 
   useEffect(() => {
@@ -216,6 +241,9 @@ export default function App() {
   }
 
   function renderNavButton(item) {
+    if (item.eatstreetOnly && eventKey !== "eatstreet") {
+      return null;
+    }
     return (
       <button
         key={item.id}
@@ -232,6 +260,9 @@ export default function App() {
   }
 
   function renderBottomNavButton(item) {
+    if (item.eatstreetOnly && eventKey !== "eatstreet") {
+      return null;
+    }
     return (
       <button
         key={item.id}
@@ -265,7 +296,11 @@ export default function App() {
           <aside className={`sidebar ${isSidebarOpen ? "open" : ""}`}>
             <div className="sidebar-header">
               <div className="sidebar-title">
-                <span>BrotherHood Nepal • NLT</span>
+                <span>
+                  {eventKey === "eatstreet"
+                    ? "EATSTREET• NLT"
+                    : "BrotherHood Nepal • NLT"}
+                </span>
                 <h2>Sindhuli Admin</h2>
               </div>
               <button
@@ -313,10 +348,21 @@ export default function App() {
             </header>
             <main className="main-content">
               {activeView === "scanner" && (
-                <Scanner jwt={token} autoStart={autoStartCamera} />
+                <Scanner
+                  jwt={token}
+                  autoStart={autoStartCamera}
+                  eventKey={eventKey}
+                />
               )}
-              {activeView === "review" && <ReviewTickets jwt={token} />}
-              {activeView === "book" && <BookTickets jwt={token} />}
+              {activeView === "review" && (
+                <ReviewTickets jwt={token} eventKey={eventKey} />
+              )}
+              {activeView === "book" && (
+                <BookTickets jwt={token} eventKey={eventKey} />
+              )}
+              {activeView === "settle" && eventKey === "eatstreet" && (
+                <SettleMenu jwt={token} />
+              )}
             </main>
           </div>
           <nav className={`bottom-nav ${isFooterVisible ? "visible" : "hidden"}`}>
