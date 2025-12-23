@@ -16,6 +16,9 @@ export default function SettleMenu({ jwt }) {
     rate: 12.85,
   });
 
+  const amountPayable =
+    Number(summary.totalPrice || 0) - Number(summary.settleAmount || 0);
+
   useEffect(() => {
     async function loadSummary() {
       setLoading(true);
@@ -32,7 +35,7 @@ export default function SettleMenu({ jwt }) {
         }
         setSummary({
           totalPrice: Number(data.totalPrice || 0),
-          approvedCount: Number(data.approvedCount || 0),
+          approvedCount: Number(data.totalQuantity || 0),
           settleAmount: Number(data.settleAmount || 0),
           rate: Number(data.rate || 12.85),
         });
@@ -64,26 +67,28 @@ export default function SettleMenu({ jwt }) {
 
       {!loading && !error && (
         <div className="metrics-grid">
-          {/* <div className="metric-card">
-            <p>Total Approved Tickets</p>
-            <h3>{summary.totalPeople}</h3>
-          </div> */}
           <div className="metric-card">
-            <p>Total Price (Approved Only)</p>
+            <p>Total Tickets Sold</p>
+            <h3>{summary.approvedCount}</h3>
+          </div>
+          <div className="metric-card">
+            <p>Total Price </p>
             <h3>{formatCurrency(summary.totalPrice)}</h3>
           </div>
           <div className="metric-card">
             <p>Settlement Rate</p>
             <h3>{summary.rate}%</h3>
           </div>
-          <div className="metric-card">
+          <div className="metric-card settle">
             <p>Settle Amount</p>
             <h3>{formatCurrency(summary.settleAmount)}</h3>
+          </div>
+          <div className="metric-card highlight">
+            <p>Amount Payable</p>
+            <h3>{formatCurrency(amountPayable)}</h3>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-

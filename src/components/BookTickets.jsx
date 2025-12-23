@@ -381,7 +381,7 @@ export default function BookTickets({ jwt, eventKey = "default" }) {
               <thead>
                 <tr>
                   <th>S.N.</th>
-                  <th>Ticket #</th>
+                  <th>Ticket No</th>
                   <th>Ticket</th>
                   <th>Buyer</th>
                   <th>People</th>
